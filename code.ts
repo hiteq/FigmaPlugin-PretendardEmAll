@@ -113,15 +113,21 @@ async function loadFontIfNeeded(font: FontName): Promise<void> {
 
 let processedCount = 0;
 let totalCount = 0;
+let lastNotifiedPercentage = -1;
 
 async function processTextNode(textNode: TextNode, index: number, textNodes: TextNode[]): Promise<boolean> {
   try {
-    // 진행 상황 업데이트 (10개당 1회 표시)
+    // 진행 상황 업데이트 (5% 단위로 표시)
     processedCount = index + 1;
     totalCount = textNodes.length;
-    if (processedCount % 10 === 1 || processedCount === totalCount) {
-      const timeout = processedCount === totalCount ? 5000 : 3000;
-      showNotification(`Processing ${processedCount}/${totalCount} text layers...`, { timeout });
+    
+    const currentPercentage = Math.floor((processedCount / totalCount) * 100);
+    const shouldNotify = currentPercentage >= lastNotifiedPercentage + 5 || processedCount === totalCount;
+    
+    if (shouldNotify) {
+      lastNotifiedPercentage = currentPercentage;
+      const timeout = processedCount === totalCount ? 5000 : 2000;
+      showNotification(`Processing ${processedCount}/${totalCount} text layers... (${currentPercentage}%)`, { timeout });
     }
     
     // 변경 대상 정보 로깅
