@@ -91,11 +91,20 @@ const loadCollectedFonts = async (usedFonts: {family: string, styles: Set<string
   console.log('Collected fonts loading attempted');
 };
 
-// 동적으로 폰트 로드
+// 이미 로딩된 폰트를 추적하기 위한 캐시
+const loadedFontsCache = new Set<string>();
+
+// 동적으로 폰트 로드 (캐싱 적용)
 async function loadFontIfNeeded(font: FontName): Promise<void> {
   if (typeof font !== 'symbol' && font.family) {
+    const fontKey = `${font.family}|${font.style}`;
+    if (loadedFontsCache.has(fontKey)) {
+      return; // 이미 로딩된 폰트는 건너뜀
+    }
+    
     try {
       await figma.loadFontAsync(font);
+      loadedFontsCache.add(fontKey); // 성공적으로 로딩되면 캐시에 추가
     } catch (error: any) {
       console.log(`Failed to load font ${font.family} ${font.style}:`, error.message);
     }
@@ -107,10 +116,12 @@ let totalCount = 0;
 
 async function processTextNode(textNode: TextNode, index: number, textNodes: TextNode[]): Promise<boolean> {
   try {
-    // 진행 상황 업데이트
+    // 진행 상황 업데이트 (10개당 1회 표시)
     processedCount = index + 1;
     totalCount = textNodes.length;
-    showNotification(`Processing ${processedCount}/${totalCount} text layers...`, { timeout: 2000 });
+    if (processedCount % 10 === 1 || processedCount === totalCount) {
+      showNotification(`Processing ${processedCount}/${totalCount} text layers...`, { timeout: 2000 });
+    }
     
     // 변경 대상 정보 로깅
     console.log(`Processing text node ${textNode.id}: "${textNode.characters.substring(0, 50)}${textNode.characters.length > 50 ? '...' : ''}"`);
@@ -227,10 +238,18 @@ function getFontStyle(cssWeight: number): string {
   return 'Black';
 }
 
-// Pretendard Variable 스타일을 동적으로 로드
+// Pretendard Variable 스타일 로딩을 위한 캐시
+const loadedPretendardStyles = new Set<string>();
+
+// Pretendard Variable 스타일을 동적으로 로드 (캐싱 적용)
 async function loadPretendardStyle(style: string): Promise<void> {
+  if (loadedPretendardStyles.has(style)) {
+    return; // 이미 로딩된 스타일은 건너뜀
+  }
+  
   try {
     await figma.loadFontAsync({ family: 'Pretendard Variable', style });
+    loadedPretendardStyles.add(style); // 성공적으로 로딩되면 캐시에 추가
   } catch (error: any) {
     console.log(`Failed to load Pretendard Variable ${style}:`, error.message);
   }
