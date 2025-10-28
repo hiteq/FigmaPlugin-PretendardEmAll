@@ -115,20 +115,22 @@ let processedCount = 0;
 let totalCount = 0;
 let lastNotifiedPercentage = -1;
 
-async function processTextNode(textNode: TextNode, index: number, textNodes: TextNode[]): Promise<boolean> {
+// 진행 상황 업데이트 함수
+function updateProgress(current: number, total: number) {
+  const currentPercentage = Math.floor((current / total) * 100);
+  const shouldNotify = currentPercentage >= lastNotifiedPercentage + 5 || current === total;
+  
+  if (shouldNotify) {
+    lastNotifiedPercentage = currentPercentage;
+    const timeout = current === total ? 5000 : 2000;
+    showNotification(`Processing ${current}/${total} text layers... (${currentPercentage}%)`, { timeout });
+  }
+}
+
+async function processTextNode(textNode: TextNode, index: number, textNodes: TextNode[], updateProgressFn: (current: number) => void): Promise<boolean> {
   try {
-    // 진행 상황 업데이트 (5% 단위로 표시)
-    processedCount = index + 1;
-    totalCount = textNodes.length;
-    
-    const currentPercentage = Math.floor((processedCount / totalCount) * 100);
-    const shouldNotify = currentPercentage >= lastNotifiedPercentage + 5 || processedCount === totalCount;
-    
-    if (shouldNotify) {
-      lastNotifiedPercentage = currentPercentage;
-      const timeout = processedCount === totalCount ? 5000 : 2000;
-      showNotification(`Processing ${processedCount}/${totalCount} text layers... (${currentPercentage}%)`, { timeout });
-    }
+    // 진행 상황 업데이트
+    updateProgressFn(index + 1);
     
     // 변경 대상 정보 로깅
     console.log(`Processing text node ${textNode.id}: "${textNode.characters.substring(0, 50)}${textNode.characters.length > 50 ? '...' : ''}"`);
@@ -217,11 +219,28 @@ collectUsedFonts(figma.currentPage.selection)
     }
     showNotification(`Processing ${textNodes.length} text layers...`, { timeout: 500 })
 
-    const results = [];
-    for (let i = 0; i < textNodes.length; i++) {
-      const result = await processTextNode(textNodes[i], i, textNodes);
-      results.push(result);
+    // 4개 쓰레드로 병렬 처리
+    const chunkSize = Math.ceil(textNodes.length / 4);
+    const chunks = [];
+    for (let i = 0; i < textNodes.length; i += chunkSize) {
+      chunks.push(textNodes.slice(i, i + chunkSize));
     }
+
+    // 각 청크를 병렬로 처리
+    const chunkPromises = chunks.map(async (chunk, chunkIndex) => {
+      const chunkResults = [];
+      for (let i = 0; i < chunk.length; i++) {
+        const globalIndex = chunkIndex * chunkSize + i;
+        const result = await processTextNode(chunk[i], globalIndex, textNodes, (current) => {
+          updateProgress(current, textNodes.length);
+        });
+        chunkResults.push(result);
+      }
+      return chunkResults;
+    });
+
+    const chunkResults = await Promise.all(chunkPromises);
+    const results = chunkResults.flat();
     const count = results.filter(Boolean).length;
     console.log(`All done. Processed ${count} nodes.`);
     figma.closePlugin(`✅ ${count} text layers have been updated.`)
