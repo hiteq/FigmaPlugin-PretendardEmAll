@@ -120,7 +120,8 @@ async function processTextNode(textNode: TextNode, index: number, textNodes: Tex
     processedCount = index + 1;
     totalCount = textNodes.length;
     if (processedCount % 10 === 1 || processedCount === totalCount) {
-      showNotification(`Processing ${processedCount}/${totalCount} text layers...`, { timeout: 2000 });
+      const timeout = processedCount === totalCount ? 5000 : 3000;
+      showNotification(`Processing ${processedCount}/${totalCount} text layers...`, { timeout });
     }
     
     // 변경 대상 정보 로깅
