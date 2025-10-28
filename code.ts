@@ -14,17 +14,24 @@ function showNotification(message: string, options?: NotificationOptions) {
   currentNotification = figma.notify(message, options);
 }
 
-// 페이지 내 모든 텍스트 노드를 스캔하여 사용 중인 폰트 정보 수집
-const collectUsedFonts = async (): Promise<{family: string, styles: Set<string>}[]> => {
+// 선택된 레이어 내 텍스트 노드를 스캔하여 사용 중인 폰트 정보 수집
+const collectUsedFonts = async (selectedNodes: readonly SceneNode[]): Promise<{family: string, styles: Set<string>}[]> => {
   showNotification(`Scanning used fonts...`);
   
-  // 페이지 내 모든 텍스트 노드 찾기
-  const allTextNodes = figma.currentPage.findAll(node => node.type === 'TEXT') as TextNode[];
+  // 선택된 레이어 내 텍스트 노드 찾기
+  const textNodes = selectedNodes.flatMap(node => {
+    if (node.type === 'TEXT') {
+      return [node as TextNode];
+    } else if ('findAll' in node) {
+      return node.findAll((n: SceneNode) => n.type === 'TEXT') as TextNode[];
+    }
+    return [];
+  });
   
   // 사용 중인 폰트 정보 수집
   const fontMap = new Map<string, Set<string>>();
   
-  for (const textNode of allTextNodes) {
+  for (const textNode of textNodes) {
     try {
       if (textNode.fontWeight === figma.mixed || textNode.fontName === figma.mixed) {
         // Mixed 폰트 처리 - 각 문자별로 폰트 정보 추출
@@ -58,7 +65,7 @@ const collectUsedFonts = async (): Promise<{family: string, styles: Set<string>}
     styles: new Set(styles)
   }));
   
-  console.log(`Collected ${usedFonts.length} font families from ${allTextNodes.length} text nodes`);
+  console.log(`Collected ${usedFonts.length} font families from ${textNodes.length} text nodes`);
   return usedFonts;
 };
 
@@ -165,7 +172,7 @@ async function processTextNode(textNode: TextNode, index: number, textNodes: Tex
   }
 }
 
-collectUsedFonts()
+collectUsedFonts(figma.currentPage.selection)
   .then(async (usedFonts) => {
     await loadCollectedFonts(usedFonts);
     showNotification(`Fonts loaded.`)
